@@ -1,0 +1,255 @@
+{ This procedure produces an Argand diagram for pretty pictures }
+
+
+{ Maintenance Log
+  ---------------
+Date                   Action                        By
+----                   ------                        --
+20/12/87             Initial Coding                  D.Kelsey
+15/02/88             Approach Logic removed          D.Kelsey
+
+
+
+             Last update:15/02/87   10:20
+
+}
+
+
+procedure ArgDiag(Roots:carray;
+                  num,prec:integer;
+                  coeff:carray;
+                  numco:integer;
+                  eqn:astring;
+                  opt:integer);
+
+Const
+  PixCol = green;    { colour definitions }
+  ScrBack = black;
+  LineFore = White;
+  TxtFore = white;
+  TxtBack = Black;
+  NumCol = red;
+  lines = 25;
+  ArgMax = 22;   { maximum number of roots per column }
+  outlen = 15;   { maximum string size to be displayed on printer }
+  ErrorX = 20;   { position for error message if no graphics available }
+  ErrorY = 15;
+
+
+var
+
+  { the global graphics and screen control variables }
+
+  graphdriver,graphmode,errorcode:integer;
+  CentreX,CentreY,New_Line,YStart,CharWidth,strlen,RadiusX,RadiusY:integer;
+  loop,OldPlotX,OldPlotY,PlotX,plotY,MaxX,MaxY,MessX,MessY,TextSize:integer;
+  NoCols,TextStart,ColSize,DivX,ColNo,RowNo:integer;
+  NumX,RealRootX,ImagRootX:array[0..10] of integer;
+  ScaleX,ScaleY:real;
+
+  { other variables }
+
+  MaxRoot:Complex;
+  Strroot:astring;
+  key:char;
+
+
+
+
+{ the next procedure sets up the graphic values required, and displays the
+  initial screen }
+
+procedure initial_scr;
+
+var
+  loop:integer;
+
+
+begin
+  graphdriver:=detect;
+  writeln(graphdriver);
+  repeat
+    key:=keyboard;
+  until key=ESC;
+  exit;
+  initgraph(graphdriver,graphmode,'');  { initialise graphics driver }
+  errorcode:=graphresult;
+  if errorcode = grok then begin
+    MaxX:=getMaxX;
+    MaxY:=getMaxY;
+    Charwidth:=8;
+    New_line:=MaxY div lines;        { number of pixels to a new line }
+    MessX:=9*charwidth;
+    MessY:=MaxY-New_line;
+    SetBkColor(TxtBack);
+    SetColor(txtFore);
+    OuttextXY(0,MessY,'MESSAGE:');
+    OutTextXY(MaxX Div 4,1,'Argand Diagram of solutions');
+
+    { define the argand circle }
+
+    CentreX:=(MaxX div 4);
+    CentreY:=2*New_Line + (MaxY - 4*New_line) div 2;
+    RadiusX:=CentreX - 10;
+    RadiusY:=(MaxY - 4*New_line) div 2;
+
+    { define the text output position }
+
+    TextSize:=MaxX div 2;
+    TextStart:=MaxX-TextSize;
+    NoCols:=((Num-1) div ArgMax);
+    ColSize:=TextSize div (NoCols+1);
+    StrLen:=((ColSize div 2) div charwidth)-3; { -3 for number info as well }
+    Ystart:=3*new_Line;
+    for loop:=0 to NoCols do begin
+      NumX[loop]:=TextStart+loop*ColSize + Charwidth div 2;
+      RealRootX[loop]:=NumX[loop] + 4*charwidth;
+      ImagRootX[loop]:=RealRootX[loop]+(strlen+1)*charwidth;
+      SetBkColor(ScrBack);
+      SetColor(LineFore);
+      DivX:=NumX[loop]-charwidth div 2;
+      line(DivX,Ystart,DivX,Ystart+ArgMax*New_Line);
+      DivX:=ImagRootX[loop] - charwidth div 2;
+      line(DivX,Ystart,DivX,Ystart+ArgMax*New_Line);
+      DivX:=RealRootX[loop] - charwidth div 2;
+      line(DivX,Ystart,DivX,Ystart+ArgMax*New_Line);
+      OuttextXY(RealRootX[loop]+(Strlen*charwidth div 2)-2*charWidth,YStart-New_line,'Real');
+      OuttextXY(ImagRootX[loop]+(Strlen*charwidth div 2)-2*charWidth,YStart-New_line,'Imag');
+    end; { for }
+    OutTextXY(textStart+(TextSize div 2)-3*charwidth,Ystart-2*new_line,'Roots');
+  end;   { if }
+end;  { procedure }
+
+{----------------------------------------------------------------------------}
+
+
+{ the next procedure controls the sending of text or screen to printer }
+
+procedure print;
+
+var
+  loopit:integer;
+
+begin
+  repeat
+    if ErrorCode=GrOk then Graphmess(MessX,MessY,'F1 - dump Screen, F5 - output Roots only, Space - Exit.')
+    else TextMess(ErrorX,ErrorY,' no screen available, F5 - output roots, Space - Exit.');
+    key:=keyboard;
+    if not escape then begin
+      if ((key = F1) and (ErrorCode = GrOk)) or (key = F5) then begin
+
+        { display equation solved }
+
+        case opt of
+        PolyOption:begin
+            GraphMess(MessX,MessY,'Outputing Equation information');
+            writeln(lst);
+            writeln(lst);
+            writeln(lst,'Polynomial Solved, Coefficients are');
+            writeln(lst);
+            for loopit:=0 to numco do begin
+              writeln(lst,'(',coeff[loopit,0]:15:prec,'    ',coeff[loopit,1]:15:prec,' i) z^',numco-loopit);
+            end;
+            writeln(lst,#12);
+          end;
+        NonlinOpt:begin
+            convert(eqn);
+            writeln(lst);
+            writeln(lst);
+            writeln(lst,'Non-linear Equation solved was');
+            writeln(lst);
+            writeln(lst,eqn);
+            writeln(lst);
+            writeln(lst);
+          end;
+        end;   { case }
+
+        { now output the roots or the screen }
+
+        if key = F1 then begin
+          Graphmess(MessX,MessY,'Dumping Screen');
+          hardcopy;
+        end
+        else begin
+          Graphmess(messX,MessY,'Outputting Roots');
+          if key = F5 then begin
+            Writeln(lst);
+            Writeln(lst,'Roots are as follows :');
+            Writeln(lst);
+            Writeln(lst);
+            for loopit:=1 to num do begin
+              writeln(lst,roots[loopit,0]:outlen:prec,'    ',roots[loopit,1]:outlen:prec,' i');
+            end;
+            Writeln(lst);
+            Writeln(lst);
+          end;
+        end;
+      end;   { if }
+    end;
+  until (key = SPC) or escape;
+end;  { procedure }
+
+{----------------------------------------------------------------------------}
+
+
+{ Main line routine }
+
+begin
+  initial_scr;
+  if errorcode = grok then begin
+
+    { locate the maximum modulus root in the real and imaginary plane }
+
+    MaxRoot[0]:=0;
+    MaxRoot[1]:=0;
+    for loop:=1 to num do begin
+      if MaxRoot[0] < abs(roots[loop,0]) then MaxRoot[0]:=abs(roots[loop,0]);
+      if MaxRoot[1] < abs(roots[loop,1]) then MaxRoot[1]:=abs(roots[loop,1]);
+    end;
+
+    { if too small, then correct }
+
+    if MaxRoot[0] < 1e-10 then MaxRoot[0]:=1e-5;
+    if MaxRoot[1] < 1e-10 then MaxRoot[1]:=1e-5;
+    MaxRoot[0]:=MaxRoot[0]+(MaxRoot[0]/10);
+    MaxRoot[1]:=MaxRoot[1]+(MaxRoot[1]/10);
+    scaleX:=RadiusX/MaxRoot[0];
+    ScaleY:=RadiusY/MaxRoot[1];
+    SetBkColor(scrBack);
+    SetColor(LineFore);
+    line(CentreX-RadiusX,CentreY,CentreX+radiusX,CentreY);  { display axes }
+    line(CentreX,CentreY-radiusY,CentreX,CentreY+radiusY);
+
+    { plot points }
+
+    for loop:=1 to num do begin
+      dectrunc(roots[loop,0],prec);
+      dectrunc(roots[loop,1],prec);
+      PlotX:=CentreX+trunc(roots[loop,0]*ScaleX);
+      PlotY:=CentreY-trunc(roots[loop,1]*scaleY);
+      SetColor(Pixcol);
+      Line(PlotX-1,PlotY-1,PlotX+1,PlotY+1);
+      Line(PlotX-1,PlotY+1,PlotX+1,PlotY-1);
+
+      { display the root }
+
+      ColNo:=(loop-1) div ArgMax;
+      RowNo:=loop - ColNo*ArgMax -1;
+      Str(loop,Strroot);
+      setColor(NumCol);
+      OutTextXY(PlotX+4,PlotY-3,Strroot);   { display number of root }
+      OutTextXY(NumX[ColNo],Ystart+RowNo*New_line,Strroot);
+      SetColor(txtFore);
+      str(roots[loop,0]:strlen:prec,strroot);
+      if length(strroot) > strlen then strroot[0]:=chr(strlen);
+      OutTextXY(RealRootX[ColNo],YStart+RowNo*New_Line,strroot);
+      str(roots[loop,1]:strlen:prec,strroot);
+      if length(strroot) > strlen then strroot[0]:=chr(strlen);
+      OutTextXY(ImagRootX[ColNo],YStart+RowNo*New_Line,strroot);
+    end;  { for }
+  end;    { if }
+  print;      { do printing process control }
+  closegraph;
+end;  { procedure }
+
+{----------------------------------------------------------------------------}

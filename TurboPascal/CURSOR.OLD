@@ -1,0 +1,41 @@
+{ this File provides the utility of turning the cursor on or off, when required }
+
+
+{ Maintenance log
+  ---------------
+Date               Action                     by
+----               ------                     --
+20/12/87       initial coding                 D.Kelsey
+
+
+               Last Update:20/12/87    14:30
+
+
+}
+
+
+procedure setcursor(on:boolean);
+
+type
+  registers = record
+                case integer of
+                  0: (AX,BX,CX,DX,BP,SI,DI,DS,ES,Flags:word);
+                  1: (AL,AH,BL,BH,CL,CH,DL,DH:byte);
+              end;
+
+var
+  reg : registers;
+
+begin
+  with reg do
+  begin
+    if on then
+      cx:=$0508
+    else
+      cx:=$3040;
+    bx:=0;
+    ax:=$0100;
+  end;
+  intr($10,Dos.Registers(reg));
+end;
+

@@ -1,0 +1,803 @@
+{ this is the actual method used to solve a polynomial }
+
+
+
+{ Maintenace Log
+  --------------
+Date            Action                     By
+----            ------                     --
+20/12/87      Initial Coding               D.Kelsey
+15/02/88      update evaluate for real
+              coeff logic                  D.Kelsey
+16/02/88      update search and fix
+              saddle pt coeff bug          D.kelsey
+
+
+
+              Last Update: 16/02/88    09:50
+
+}
+
+
+
+Procedure Solve_Polynomial(coeff:carray;
+                           degree:integer;
+                           var roots:carray;
+                           var RootCnt:integer;
+                           PolyPrec:integer;
+                           initial_root:complex);
+
+
+{ the following variables are global to deal with screen information manipulation }
+
+var
+  driver,mode,ecode:integer;
+  CentreX,centreY,radiusX,radiusY,RootRealX,RootImagX,RootY:integer;
+  charwidth,OutRealX,OutImagX,MessX,MessY,New_Line,strlen,CoeffY,MaxX,MaxY:integer;
+  divX,RealCoeffX,ImagCoeffX,ScreenSize,NoCols,ColSize:Integer;
+  saddle:boolean;
+  errcount,ActDeg,loop:integer;
+  key:char;
+  RealPos,ImagPos:array[0..10] of integer;
+
+
+const
+  lineback = white;
+  linefore = blue;
+  seplinebk = white;
+  seplinefr = red;
+  TxtCol = blue;
+  BackCol = white;
+  CoeffBack = white;
+  CoeffFore = green;
+  pixBack = white;
+  pixfore = green;
+  ApproxBack = white;
+  Approxfore = white;
+  RootFore = white;
+  RootBack = blue;
+  StartLine = 3;
+  lines = 24;
+  MaxRootCt = 20;
+  a1p1 = 0.8;
+  ErrorX = 20;
+  ErrorY = 15;
+
+
+  Procedure Display_Polyscreen;
+
+
+  var
+    count:integer;
+    text:string[10];
+
+
+
+  begin
+    driver:=EGA;                     { initialise graphics }
+    mode:=EGA64hi;
+    initGraph(driver,mode,'');
+    ecode:=GraphResult;
+    if ecode = GrOk then begin
+      charwidth:=8;
+      MaxX:=GetMaxX;
+      MaxY:=GetMaxY;                    { set screen information }
+      New_Line:=MaxY div lines;
+      MessX:=CharWidth*9;               { locate message text position }
+      MessY:=MaxY - new_line;
+      CoeffY:=New_line * StartLine;    { set up start line for output }
+      RadiusX:=(MaxX div 3) div 2;     { define circle information }
+      RadiusY:=(maxY div 3);
+      CentreX:=MaxX - RadiusX;
+      CentreY:=RadiusY;
+
+{ if we can fit on the coefficients then do so otherwise, just the roots }
+
+      if degree < MaxRootCT then begin
+        strlen:=((MaxX div 6) div charwidth)-2;
+        realCoeffX:=charwidth*5;
+        ImagCoeffX:=RealCoeffX+(strLen+1)*charwidth;
+
+        { set up 1st column at correct position for roots }
+
+        realpos[0]:=ImagCoeffX+(strlen+1)*charwidth;
+        ImagPos[0]:=RealPos[0]+(Strlen+1)*charwidth;
+        setcolor(txtCol);
+        setbkcolor(backCol);
+
+        { display the text and the separation lines }
+
+        OutTextXY(RealCoeffX+(strlen-6)*charwidth,0,'coefficients');
+        OutTextXY(RealPos[0]+(strlen-2)*charwidth,0,'Roots');
+        setBkColor(SepLineBk);
+        SetColor(SepLineFr);
+        DivX:=ImagCoeffX - charwidth div 2;
+        line(DivX,CoeffY,DivX,CoeffY+(degree+1)*New_Line);
+        DivX:=RealPos[0] - charwidth div 2;
+        line(DivX,CoeffY,DivX,CoeffY+(degree+1)*New_Line);
+        DivX:=ImagPos[0] - charwidth div 2;
+        line(DivX,CoeffY,DivX,CoeffY+(degree+1)*New_Line);
+
+        { display the coefficients }
+
+        for count:=0 to degree do begin
+          str((degree-count),text);
+          text:='z^'+text;
+          SetBkColor(BackCol);
+          SetColor(TxtCol);
+          OutTextXY(1,coeffY+count*new_Line,text);
+          str(coeff[count,0]:strlen:polyPrec,text);
+          SetBkColor(CoeffBack);
+          SetColor(coeffFore);
+          OutTextXY(RealCoeffX,coeffY+count*new_Line,text);
+          str(coeff[count,1]:strlen:polyprec,text);
+          OutTextXY(ImagCoeffX,coeffY+count*new_Line,text);
+        end; { for }
+      end
+      else begin
+
+        { define the root columns based on amount of screen available }
+
+        ScreenSize:=(MaxX div 3)*2;
+
+        { only require 1 col for 20 roots, but define 2 for correct strlen }
+
+        NoCols:=(degree div MaxRootCt);
+        ColSize:=ScreenSize div (NoCols+1);
+        StrLen:=(colSize div 2 - 2*charwidth) div charwidth;
+        SetBkColor(BackCol);
+        SetColor(TxtCol);
+        OutTextXY(ScreenSize div 2 - 5*charwidth,0,'R O O T S');
+
+        { calculate the column positions and display the seperation lines }
+
+        for count:=0 to NoCols do begin
+          RealPos[count]:=ColSize*count;
+          ImagPos[count]:=RealPos[count]+(strlen+2)*charwidth;
+          SetBkColor(BackCol);
+          SetColor(TxtCol);
+          OutTextXY(realpos[count]+(strlen*charwidth div 2)-2*charwidth,new_Line,'Real');
+          OutTextXY(Imagpos[count]+(strlen*charwidth div 2)-2*charwidth,new_Line,'Imag');
+          setBkColor(SepLineBk);
+          SetColor(SepLineFr);
+
+          { locate and display the seperation lines }
+
+          DivX:=Realpos[count]+ColSize-charwidth Div 2;
+          line(DivX,CoeffY,DivX,CoeffY+(lines-1)*New_Line);
+          DivX:=Realpos[count]+(strLen+1)*charwidth;
+          line(DivX,CoeffY,DivX,CoeffY+(lines-1)*New_Line);
+        end;  { for }
+      end;  { if }
+
+      { locate the position for the approximation display }
+
+      RootRealX:=CentreX - RadiusX;
+      RootImagX:=CentreX + charwidth;
+      RootY:=MaxY-3*New_line;
+      SetBkColor(BackCol);
+      SetColor(TxtCol);
+      OutTextXY(RootImagX-2*charwidth,RootY-2*new_Line,'ROOT');
+      OutTextXY(RootRealX+((strlen div 2)-2)*charwidth,RootY-New_Line,'REAL');
+      OutTextXY(RootImagX+((strlen div 2)-2)*charwidth,RootY-New_Line,'IMAG');
+      OutTextXY(0,MessY,'MESSAGE:');
+    end;  { if }
+  end;   { procedure }
+
+{----------------------------------------------------------------------------}
+
+{ here is the method that solves a polynomial }
+
+  Procedure Grant(var polyc:carray;
+                  var n:integer;
+                  var zeros:carray;
+                  init_z:complex;
+                  error:boolean);
+
+
+
+
+  const
+    ConjTol = 1e-4;
+    realtol = 1e-2;
+
+  var
+    loop,deg:integer;
+    fac:accuracy;
+    new_root,f,fx,root,r,s:complex;
+    passed,first_root,result:boolean;
+    real_coeff:boolean;
+    tol,tol2:accuracy;
+
+{ the following procedures are for graphic control }
+
+{ the first procedure clears the unit circle }
+
+  Procedure Clear_Circle;
+  begin
+    SetBkColor(BackCol);
+    SetColor(TxtCol);
+    setviewport(CentreX-RadiusX,CentreY-RadiusY,CentreX+RadiusX,CentreY+RadiusY,true);
+    clearViewPort;
+    setViewPort(0,0,MaxX,MaxY,true);
+    line(centreX-radiusX,CentreY,centreX+radiusX,CentreY);
+    line(centreX,CentreY-radiusY,centreX,CentreY+radiusY);
+  end;
+
+{----------------------------------------------------------------------------}
+
+{ this procedure displays an approximation on the iteration screen, and plot its }
+
+  Procedure DisplayPlot(prevroot,root:complex;
+                        fact:accuracy);
+
+var
+  text:astring;
+  newval:complex;
+  newpointX,newpointY,oldpointX,oldpointY:integer;
+
+
+  begin
+    SetBkColor(ApproxBack);
+    SetColor(ApproxFore);
+    setViewPort(RootRealX,RootY,RootImagX+strlen*charwidth,RootY+new_Line,true);
+    ClearViewPort;
+    SetViewPort(0,0,MaxX,MaxY,true);
+    crmult(root,fact,newval);
+    str(newval[0]:strlen:PolyPrec,text);
+    if length(text) > strlen then text[0]:=chr(strlen);
+    OutTextXY(RootRealX,RootY,text);
+    str(newval[1]:strlen:PolyPrec,text);
+    if length(text) > strlen then text[0]:=chr(strlen);
+    OutTextXY(RootImagX,RootY,text);
+
+{  if point within range of circle, then plot it }
+
+    if (abs(root[0]) < 1) and (abs(root[1]) < 1) then begin
+      newpointX:=trunc(root[0]*radiusX)+centreX;
+      newpointY:=trunc(root[1]*radiusY)+centreY;
+      SetBkColor(pixBack);
+      SetColor(pixFore);
+      line(newpointX-1,newpointY-1,newpointX+1,newpointY+1); { draw cross }
+      line(newpointX-1,newpointY+1,newpointX+1,newpointY-1);
+
+{  if the previous point was also in the circle, then join the 2 together }
+
+      if (abs(prevroot[0]) < 1) and (abs(prevroot[1]) < 1) then begin
+        SetBkColor(lineBack);
+        SetColor(LineFore);
+        oldpointX:=trunc(prevroot[0]*radiusX)+centreX;
+        oldpointY:=trunc(prevroot[1]*radiusY)+CentreY;
+        line(oldpointX,oldpointY,newpointX,newpointY);
+      end;
+    end;
+  end;
+
+{----------------------------------------------------------------------------}
+
+{ the following procedure will display a root on the screen }
+
+  Procedure Display_root(root:complex;
+                         pos:integer);
+
+
+
+  var
+    info:astring;
+    ColNo,RowNo:integer;
+
+
+  begin
+    ColNo:=pos div MaxRootCt;
+    RowNo:=pos - (ColNo*MaxRootCt);
+    SetBkColor(RootBack);
+    SetColor(RootFore);
+    str(root[0]:strlen:PolyPrec,info);
+    if length(info) > strlen then info[0]:=chr(strlen);
+    OutTextXY(Realpos[ColNo],CoeffY+RowNo*new_line,info);
+    str(root[1]:strlen:PolyPrec,info);
+    if length(info) > strlen then info[0]:=chr(strlen);
+    OutTextXY(Imagpos[ColNo],CoeffY+RowNo*new_line,info);
+  end;
+
+{----------------------------------------------------------------------------}
+
+{ this next procedure evaluates the polynomial at z.It also evaluates the
+  partial derivative fx at z, and test to see if f is within a bound.}
+
+
+procedure evalpoly(co:carray;
+                       n:integer;
+                       z:complex;
+                       var f,fx:complex;
+                       var sat:boolean);
+
+    var
+      nc,oc,nd,od:complex;
+      loop       :integer;
+      og,ng,oh,nh,t,u,v,w,bound:accuracy;
+      p,q,a1,a2,a3,b1,b2,b3,c:accuracy;
+      m:integer;
+
+    begin
+        nc:=co[0];
+        nd:=co[0];
+        og:=1;
+        oh:=1;
+        t:=abs(z[0]);
+        u:=abs(z[1]);     { initial setups }
+
+  { horners Algorithm }
+
+        for loop:=1 to n do begin
+          oc:=nc;
+          od:=nd;
+          cmult(z,oc,nc);
+          cadd(nc,co[loop],nc);  { nc = z*oc+co(loop) }
+          cmult(z,od,nd);
+          cadd(nd,nc,nd);        { nd = z*od+nc }
+          if sat then begin
+            v:=og+abs(oc[0]);
+            w:=oh+abs(oc[1]);
+            ng:=t*v+u*w+abs(co[loop,0])+2*abs(nc[0]);
+            nh:=u*v+t*w+abs(co[loop,1])+2*abs(nc[1]);
+            og:=ng;
+            oh:=nh;
+          end;
+        end;
+        f:=nc;
+        fx:=od;
+        if sat then begin
+
+          { check the point to see if close enough to root }
+
+          bound:=exp((5*n)*ln(1+tol))*tol;
+          sat:=(abs(f[0])<=bound*ng) and (abs(f[1])<=bound*nh);
+        end;
+    end;  {procedure}
+
+{----------------------------------------------------------------------------}
+
+
+{ here is the actual search procedure }
+
+    procedure search(coeffs:carray;
+                          n:integer;
+                     var root:complex;
+                     factor:accuracy;
+                     var sadpt:boolean);
+
+    var
+      fun,nfun,g,mods,sig:accuracy;
+      f,fx,s:complex;
+      sat:boolean;
+      iterations:integer;
+      oldroot:complex;
+      key:char;
+
+    begin
+      sadpt:=false;
+      sat:=false;
+      iterations:=1;
+
+      { correct imag start to allow for search of complex roots}
+
+      if abs(root[1]) < realtol then root[1]:=realtol;
+      evalpoly(coeffs,n,root,f,fx,sat);
+      fun:=f[0]*f[0]+f[1]*f[1];
+      repeat
+        oldroot:=root;
+        iterations:=iterations+1;
+        sat:=iterations>20;
+        g:=fx[0]*fx[0]+fx[1]*fx[1];
+        if g < fun*tol2 then sadpt:=true
+        else begin
+          s[0]:=-(f[0]*fx[0]+f[1]*fx[1])/g;
+          s[1]:=(-f[1]*fx[0]+f[0]*fx[1])/g;
+          sig:=2e-4;
+          mods:=cabs(s);
+          if mods > 1 then begin
+            crdiv(s,mods,s);
+            sig:=sig/mods;
+          end;
+          cadd(root,s,root);     { new approximation now calculated }
+          repeat
+                  { check for ESC key pressed }
+            if keypressed then begin
+              key:=readkey;
+              if key = ESC then escape:=true;
+            end;
+            if not escape then begin
+              displayPlot(oldroot,root,factor);
+              iterations:=iterations+1;
+              sat:=(mods < 1e-5) or (iterations > 20);
+              evalpoly(coeffs,n,root,f,fx,sat);
+              if not sat then begin
+                nfun:=f[0]*f[0]+f[1]*f[1];
+                if fun-nfun < sig*fun then begin
+                  crmult(s,0.5,s);
+                  mods:=mods*0.5;
+                  sig:=sig*0.5;
+                  csub(root,s,root);
+                end;  { if }
+              end;    { if }
+            end;      { if }
+          until sat or (fun-nfun >= sig*fun) or escape;
+        end; { if }
+      until sat or sadpt or escape;
+    end;      { procedure }
+
+  {----------------------------------------------------------------------------}
+
+
+{ the next procedure normalises a polynomial
+In the Grant and Hitchins method, 2 routines are provided, 1 for real and
+one for complex, however the complex case reduces to the real case if the
+complex coefficients are zero  }
+
+
+    procedure normalise(var co:carray;
+                             n:integer);
+    var
+      scale,fun,k:accuracy;
+      loop:integer;
+
+    begin
+      scale:=0;
+      for loop:=0 to n do begin
+        if (abs(co[loop,0])>=1) or (abs(co[loop,1])>=1) then begin
+          if abs(co[loop,0]) > abs(co[loop,1]) then fun:=abs(co[loop,0]*sqrt(1+sqr(co[loop,1]/co[loop,0])))
+          else fun:=abs(co[loop,1]*sqrt(1+sqr(co[loop,0]/co[loop,1])));
+          if fun >= 1e-5 then scale:=scale+ln(fun);
+        end;
+        k:=scale/((n+1)*ln(2));
+        scale:=exp(-k*ln(2));    { 2^(-k) }
+      end;  { for }
+      for loop:=0 to n do begin
+        crmult(co[loop],scale,co[loop]);
+      end;
+    end;  { procedure }
+
+{----------------------------------------------------------------------------}
+
+{ the next routine performs the schur test.Again, the complex version reduces
+to the real version if the complex coefficients are zero }
+
+    function schur_test(coeff:carray;
+                            n:integer):boolean;
+
+    var
+      i,k:integer;
+      t:accuracy;
+      c:carray;
+      situation:boolean;
+
+    begin
+      situation:=false;
+      i:=n;
+      while (i >= 1) and (situation = false) do begin
+        k:=1;
+        while (k <= i) and (situation = false) do begin
+          c[k-1,0]:=coeff[i,0]*coeff[k,0]+coeff[i,1]*coeff[k,1]-coeff[0,0]*coeff[i-k,0]-coeff[0,1]*coeff[i-k,1];
+          c[k-1,1]:=coeff[i,0]*coeff[k,1]-coeff[i,1]*coeff[k,0]+coeff[0,0]*coeff[i-k,1]-coeff[0,1]*coeff[i-k,0];
+          k:=k+1;
+        end;  { while }
+        if c[i-1,0]< -tol then situation:=true
+        else begin
+          if abs(c[i-1,0]) < 1 then t:=1
+          else t:=1/abs(c[i-1,0]);
+          for k:=i-1 downto 0 do begin
+            crmult(c[k],t,coeff[k]);
+          end;  { for }
+        end;  { if }
+        i:=i-1;
+      end;  { while }
+      schur_test:=situation;
+    end;    { procedure }
+
+{----------------------------------------------------------------------------}
+
+{ this next procedure transforms a polynomial  f:z -->  f:2z  }
+
+    procedure transform(var coeffs:carray;
+                            n:integer;
+                        var fac:accuracy);
+
+
+    var
+      loop:integer;
+      scale:accuracy;
+
+    begin
+      scale:=1;
+      for loop:=n-1 downto 0 do begin
+        scale:=scale*2;
+        crmult(coeffs[loop],scale,coeffs[loop]);
+      end;  { for }
+      fac:=fac*2;
+    end;  { procedure }
+
+{----------------------------------------------------------------------------}
+
+{ the following routines deflate a root out of polynomial coefficients
+  using composite deflation }
+
+
+{ the first routine joins backward and forward deflations for a composite
+  deflation, to minimise error }
+
+
+    procedure join(a,b:carray;
+                   var c:carray;
+                   n:integer);
+    var
+      loop,k:integer;
+      nfun,fun:accuracy;
+
+    begin
+      fun:=1/tol2;
+      k:=0;
+      for loop:=0 to n do begin
+        nfun:=abs(a[loop,0])+abs(a[loop,1])+abs(b[loop,0])+abs(b[loop,1]);
+        if nfun > tol then begin
+          nfun:=(abs(a[loop,0]-b[loop,0])+abs(a[loop,1]-b[loop,1]))/nfun;
+          if nfun < fun then begin
+            fun:=nfun;
+            k:=loop;
+          end;  { if }
+        end; { if }
+      end; { for }
+
+      for loop:=k-1 downto 0 do c[loop]:=a[loop];
+      cadd (a[k],b[k],c[k]);
+      crmult(c[k],0.5,c[k]);
+      for loop:=k+1 to n do  c[loop]:=b[loop];
+    end; { procedure }
+
+{----------------------------------------------------------------------------}
+
+    procedure deflate(var poly:carray;
+                      var n:integer;
+                      root:complex);
+
+    var
+      loop:integer;
+      a,b:carray;
+
+    begin
+      a[0]:=poly[0];
+      cdiv(poly[n],root,b[n-1]);
+      b[n-1,0]:=-b[n-1,0];
+      b[n-1,1]:=-b[n-1,1];
+      for loop:=1 to n-1 do begin
+        cmult(root,a[loop-1],a[loop]);
+        cadd(a[loop],poly[loop],a[loop]);  { perform forward deflation }
+        csub(b[n-loop],poly[n-loop],b[n-loop-1]);
+        cdiv(b[n-loop-1],root,b[n-loop-1]);  { perform backward deflation }
+      end; { for }
+      n:=n-1;
+      join(a,b,poly,n);     { join together the b and f deflations }
+    end;  { procedure }
+
+{----------------------------------------------------------------------------}
+
+{ the next procedure solves a quadratic.This works forboth real and complex
+  coefficients }
+
+      procedure quadf(a,b,c:complex;
+                      var temp,temp2:complex);
+
+    var
+      num1,num2,den:complex;
+      temp3,temp4:complex;
+
+    begin
+
+{ (-b+/- sqrt(b*b-4*a*c))/(2*a)  }
+
+      cmult(b,b,temp);
+      cmult(a,c,temp2);
+      crmult(temp2,4,temp2);
+      csub(temp,temp2,temp);
+      csqrt(temp,temp);
+      temp3[0]:=-b[0];
+      temp3[1]:=-b[1];
+      cadd(temp3,temp,num1);
+      csub(temp3,temp,num2);
+      crmult(a,2,den);
+      cdiv(num1,den,temp);
+      cdiv(num2,den,temp2);
+
+    end;     { procedure }
+
+{----------------------------------------------------------------------------}
+
+{ the next procedure takes a root and deals with it severely }
+
+  procedure RootOut;
+
+
+  begin
+    crmult(root,fac,zeros[ActDeg-n+1]);
+    display_root(zeros[ActDeg-n+1],ActDeg-n);     { display root }
+
+    { if imag part is small, try just a real number }
+
+    if abs(root[1]) < realtol then begin
+      new_root[0]:=root[0];
+      new_root[1]:=0;
+      result:=true;
+      evalpoly(polyc,n,new_root,f,fx,result);
+      if result then root:=new_root;
+    end;
+    if real_coeff and (abs(root[1]) > ConjTol) then begin
+      conjugate(root,new_root);   { try the roots' conjugate }
+      result:=true;
+      evalpoly(polyc,n,new_root,f,fx,result);
+      if result then begin        { conjugate allowed ? }
+        crmult(new_root,fac,zeros[ActDeg-n+2]);
+        display_root(zeros[ActDeg-n+2],ActDeg-n+1);  { display root}
+        deflate(polyc,n,new_root);                          { remove }
+      end;
+    end;
+    deflate(polyc,n,root);                                  { remove root }
+  end;  { procedure }
+
+{----------------------------------------------------------------------------}
+
+{ the next procedure retransforms the polynomial back after x number of
+  transformations of  z:--> 2z    }
+
+procedure RescaleCoeffs;
+
+var
+  numcoeffs:integer;
+  scale:accuracy;
+
+begin
+  scale:=1;
+  for numcoeffs:=n-1 downto 0 do begin
+    scale:=scale*fac;
+    crdiv(polyc[numcoeffs],scale,polyc[numcoeffs]);
+  end;   { for }
+end;     { procedure }
+
+{----------------------------------------------------------------------------}
+
+
+{ main line section of GRANT and HITCHINS method }
+
+
+  begin
+   if Polyprec < 10 then tol:= 1e-10
+    else tol:=1e-17;
+    tol2:=tol*sqrt(tol);    { define the tolerance }
+    deg:=n;
+
+    real_coeff:=true;  { assume real coefficents }
+    for loop:=0 to n do begin
+      if polyc[loop,1] <> 0 then real_coeff:=false;  { not real coeffs }
+    end;
+    error:=false;
+    fac:=1;
+    first_root:=true;
+    while (n > 2) and (not error) and (not escape) do begin
+      Clear_Circle;
+      if (polyc[n,0] <> 0) or (polyc[n,1] <> 0) then begin
+        normalise(polyc,n);
+
+{ locate at least one root in the unit circle }
+
+        repeat
+          passed:=schur_test(polyc,n);
+          if not passed then transform(polyc,n,fac);
+        until passed;
+        if first_root then begin
+         root:=init_z;
+          first_root:=false;
+        end
+        else begin
+          root[0]:=1e-3;
+          root[1]:=0.1;
+        end;
+
+        search(polyc,n,root,fac,error);    { now find the root }
+
+{ if the imaginary part of this is < tol3 thewn try with imaginary := 0 }
+
+
+        if (not error) and (not escape) then RootOut;  { remove the root }
+      end
+      else begin
+
+        { last coeff is zero, so a factor of Z can be reomed, ie root =0+0i }
+
+        root[0]:=0;
+        root[1]:=0;
+        zeros[ActDeg-n+1]:=root;
+        display_root(root,ActDeg-n);
+        n:=n-1;
+      end;  { if }
+    end;   { while }
+
+    { either saddle point detected, escpae pressed, or down to degree 1 or 2 }
+
+    if not error and not escape then begin
+      if n = 1 then begin              { degree is 1, so easy to solve }
+        cdiv(polyc[1],polyc[0],root);  { Bz+a=0 -->  z=-a/b }
+        root[0]:=-root[0]*fac;
+        root[1]:=-root[1]*fac;
+        zeros[ActDeg]:=root;
+        Display_root(root,ActDeg-1);
+        n:=0;
+      end
+      else begin
+        if n = 2 then begin           {degree is 2, so use quadratic formula }
+          quadf(polyc[0],polyc[1],polyc[2],root,new_root);
+          crmult(root,fac,root);
+          crmult(new_root,fac,new_root);
+          zeros[ActDeg]:=root;
+          zeros[ActDeg-1]:=new_root;
+          display_root(root,ActDeg-2);
+          display_root(new_root,ActDeg-1);
+          n:=0;
+        end;
+      end;
+    end
+    else begin   { exit of grant, either escape or error, but still rescale }
+      RescaleCoeffs;
+    end;    { if Not error }
+  end;   { Procedure }
+
+{----------------------------------------------------------------------------}
+
+{ main section to polynomial solve }
+
+begin
+
+  { if the starting coefficient is zero, re-ajust the polynomial to allow
+  the system to work }
+
+    while (coeff[0,0] = 0) and (coeff[0,1] = 0) and (Degree >= 1) do begin
+      for loop:=1 to Degree do begin
+        coeff[loop-1]:=coeff[loop];
+      end;
+      Degree:=Degree-1;
+    end;   { while }
+
+  ActDeg:=Degree;
+  errcount:=1;
+  Display_PolyScreen;   { display the iteration screen }
+  if ecode=GrOk then begin
+    Graphmess(MessX,MessY,'Press ESC to stop Root Location');
+    while (degree <> 0) and (errcount < 20) and (not escape) do begin
+      grant(coeff,degree,roots,initial_root,saddle);
+      if saddle then begin            { saddle point detected ? }
+
+        { select a different initial root, and solve the deflated polynomial }
+
+        initial_root[0]:=initial_root[0]*a1p1*cos(errcount*pi)-initial_root[1]*a1p1*sin(errcount*pi);
+        initial_root[1]:=initial_root[0]*a1p1*sin(errcount*pi)-initial_root[1]*a1p1*cos(errcount*pi);
+        errcount:=errcount+1;
+      end;
+    end;  { while }
+    RootCnt:=ActDeg-Degree;  { decide how many roots we have }
+    if escape then begin
+      GraphMess(MessX,MessY,'System stopped, press Space to Display roots');
+      escape:=false;
+    end
+    else GraphMess(MessX,MessY,'Press Space to Display roots');
+  end
+  else begin    { error in trying to display graphics }
+    ClrScr;
+    GotoXY(ErrorX,ErrorY);
+    SetColor(White+blink);
+    writeln('Cannot Drive a Graphics screen, press space for option selection');
+  end;
+  repeat
+    key:=keyboard;
+  until escape or (key = SPC);
+  closegraph;
+end;   { end grant procedure }
+
+{----------------------------------------------------------------------------}
